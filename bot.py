@@ -10,6 +10,12 @@ HELIUS_API_KEY = "d42a709c-e572-4344-bd5b-20874533d8eb"
 
 WALLETS = {
     "Stigman": "8fsKLLtvKNanL4ginCaiRS6UfeemY11rSf8U8fN1dJw4",
+    "71pA": "71pAfN1nJhcLaezSRYvwdsNFE9PnY9hNfcxB4nZ1gdAp",
+    "JCF": "JCFpfkrCAoovfRtkAdCde2TvPZHCmQgK5mm8Hc2LKWMZ",
+    "9L32": "9L32VYiZ8AD67gaH283dPfQwviQ6AFXuzaisWR92toTT",
+    "8EMY": "8EmYYBEN6a4xE92gLsAKVZHtmC5Ga4eNxXp1c9E8jiWg",
+    "CYA": "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o",
+    "nyhrox": "6S8GezkxYUfZy9JPtYnanbcZTMB87Wjt1qx3c6ELajKC",
     "Cupseyy": "2fg5QD1eD7rzNNCsvnhmXFm5hqNgwTTG8p7kQ6f3rx6f",
     "Yp12": "7cQjAvzJsmdePPMk8TiW8hYHHhCfdNtEaaNK3o46YP12"
 }
@@ -20,7 +26,7 @@ STABLE_TOKENS = [
     "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
 ]
 
-MIN_USD = 50
+MIN_USD = 150
 MAX_DELAY_SECONDS = 300
 bot_aktif = True
 tx_history = {wallet: set() for wallet in WALLETS.values()}
