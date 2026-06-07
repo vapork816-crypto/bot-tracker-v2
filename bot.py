@@ -31,15 +31,9 @@ bot_aktif = True
 tx_history = {wallet: set() for wallet in WALLETS.values()}
 sol_price_cache = {"price": 150, "last_update": 0}
 recap_sent = False
-
-# Per jam tracking
-hourly_best = {}
+hourly_slot = {}
 last_hour = -1
-
-# Open positions — BUY yang belum SELL
 open_positions = {}
-
-# Daily stats
 daily_stats = {name: {"buy": 0, "sell": 0, "spent": 0, "pnl": 0} for name in WALLETS.keys()}
 
 def get_sol_price():
@@ -101,17 +95,14 @@ def parse_tx(tx):
         tx_type = tx.get("type", "")
         if tx_type != "SWAP":
             return None
-
         token_transfers = tx.get("tokenTransfers", [])
         native_transfers = tx.get("nativeTransfers", [])
         fee_payer = tx.get("feePayer", "")
         tx_time = tx.get("timestamp", 0)
-
         token_in = None
         token_out = None
         amount_in = 0
         amount_out = 0
-
         for t in token_transfers:
             mint = t.get("mint", "")
             amount = t.get("tokenAmount", 0)
@@ -121,18 +112,14 @@ def parse_tx(tx):
             elif t.get("fromUserAccount") == fee_payer:
                 token_out = mint
                 amount_out = amount
-
         sol_in = sum(t.get("amount", 0) for t in native_transfers if t.get("toUserAccount") == fee_payer) / 1e9
         sol_out = sum(t.get("amount", 0) for t in native_transfers if t.get("fromUserAccount") == fee_payer) / 1e9
-
         sol_price = get_sol_price()
         min_sol = MIN_USD / sol_price
-
         if sol_out > min_sol and token_in and token_in not in STABLE_TOKENS:
             return {"sig": sig, "action": "BUY", "mint": token_in, "sol": round(sol_out, 4), "amount": amount_in, "usd": round(sol_out * sol_price, 2), "time": tx_time}
         elif token_out and token_out not in STABLE_TOKENS:
             return {"sig": sig, "action": "SELL", "mint": token_out, "sol": round(sol_in, 4), "amount": amount_out, "usd": round(sol_in * sol_price, 2), "time": tx_time}
-
         return None
     except:
         return None
@@ -141,7 +128,6 @@ async def send_notif(app, name, parsed, token_name, price, mcap):
     tx_time = datetime.fromtimestamp(parsed["time"], tz=timezone.utc)
     wib_h = (tx_time.hour + 7) % 24
     waktu = f"{tx_time.strftime('%H:%M:%S')} UTC ({wib_h:02d}:{tx_time.strftime('%M')} WIB)"
-
     if parsed["action"] == "BUY":
         emoji = "🟢"
         action_text = "BUY 🚀"
@@ -150,11 +136,9 @@ async def send_notif(app, name, parsed, token_name, price, mcap):
         emoji = "🔴"
         action_text = "SELL 💰"
         sol_text = f"Received: {parsed['sol']} SOL (≈${parsed['usd']})"
-
     amount_fmt = f"{float(parsed['amount']):,.0f}" if parsed['amount'] else "?"
     price_fmt = f"${price:.8f}" if price > 0 else "?"
     mcap_fmt = format_mcap(mcap)
-
     pesan = f"""{emoji} *Wallet Alert!*
 ━━━━━━━━━━━━━━━
 👤 *Wallet:* {name}
@@ -167,16 +151,17 @@ async def send_notif(app, name, parsed, token_name, price, mcap):
 🕐 *Time:* {waktu}
 ━━━━━━━━━━━━━━━
 🔗 [Solscan](https://solscan.io/tx/{parsed['sig']}) | 📊 [DexScreener](https://dexscreener.com/solana/{parsed['mint']})"""
-
     await app.bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=pesan, parse_mode="Markdown")
 
 async def send_recap(app):
     tanggal = datetime.now(timezone.utc).strftime("%d %B %Y")
     pesan = f"📊 *Daily Recap - {tanggal}*\n"
     pesan += "━━━━━━━━━━━━━━━\n"
+    ada_data = False
     for name, stats in daily_stats.items():
         if stats["buy"] == 0 and stats["sell"] == 0:
             continue
+        ada_data = True
         pnl = stats["pnl"]
         pnl_emoji = "📈" if pnl >= 0 else "📉"
         pnl_text = f"+${pnl:.2f}" if pnl >= 0 else f"-${abs(pnl):.2f}"
@@ -184,90 +169,70 @@ async def send_recap(app):
         pesan += f"• BUY: {stats['buy']}x | SELL: {stats['sell']}x\n"
         pesan += f"• Total Spent: ${stats['spent']:.2f}\n"
         pesan += f"• Total PnL: {pnl_emoji} {pnl_text}\n"
+    if not ada_data:
+        pesan += "\n_Tidak ada transaksi hari ini._\n"
     pesan += "\n━━━━━━━━━━━━━━━"
     await app.bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=pesan, parse_mode="Markdown")
     for name in daily_stats:
         daily_stats[name] = {"buy": 0, "sell": 0, "spent": 0, "pnl": 0}
 
 async def monitor_wallets(app):
-    global recap_sent, last_hour, hourly_best
-
+    global recap_sent, last_hour, hourly_slot
     while True:
         try:
             if not bot_aktif:
                 await asyncio.sleep(60)
                 continue
-
             utc_now = datetime.now(timezone.utc)
             wib_hour = (utc_now.hour + 7) % 24
-
-            # Reset per jam
             if wib_hour != last_hour:
-                # Kirim notif terbaik jam lalu
-                for key, data in hourly_best.items():
-                    name, action = key.split("_")
-                    parsed = data["parsed"]
-                    token_name, price, mcap = get_token_info(parsed["mint"])
-                    await send_notif(app, name, parsed, token_name, price, mcap)
-
-                    if action == "BUY":
-                        daily_stats[name]["buy"] += 1
-                        daily_stats[name]["spent"] += parsed["usd"]
-                        daily_stats[name]["pnl"] -= parsed["usd"]
-                        # Catat open position
-                        open_positions[f"{name}_{parsed['mint']}"] = parsed
-
-                    elif action == "SELL":
-                        daily_stats[name]["sell"] += 1
-                        daily_stats[name]["pnl"] += parsed["usd"]
-                        # Hapus open position
-                        open_key = f"{name}_{parsed['mint']}"
-                        if open_key in open_positions:
-                            del open_positions[open_key]
-
-                hourly_best = {}
+                hourly_slot = {"BUY": False, "SELL": False}
                 last_hour = wib_hour
-
-            # Recap jam 20 WIB
             if wib_hour == 20 and utc_now.minute == 0 and not recap_sent:
                 await send_recap(app)
                 recap_sent = True
             elif wib_hour != 20:
                 recap_sent = False
-
-            # Scan transaksi
             for name, wallet in WALLETS.items():
                 txs = get_transactions(wallet)
                 if not txs or not isinstance(txs, list):
                     continue
-
                 for tx in txs[:5]:
                     sig = tx.get("signature", "")
-                    if sig and sig not in tx_history[wallet]:
-                        parsed = parse_tx(tx)
-                        if parsed:
-                            action = parsed["action"]
-                            mint = parsed["mint"]
-                            key = f"{name}_{action}"
-                            open_key = f"{name}_{mint}"
-
-                            # Cek open position — SELL token yang sudah di-BUY
-                            if action == "SELL" and open_key in open_positions:
-                                token_name, price, mcap = get_token_info(mint)
-                                await send_notif(app, name, parsed, token_name, price, mcap)
-                                daily_stats[name]["sell"] += 1
-                                daily_stats[name]["pnl"] += parsed["usd"]
-                                del open_positions[open_key]
-                                tx_history[wallet].add(sig)
-                                continue
-
-                            # Simpan yang terbesar per jam
-                            if key not in hourly_best or parsed["usd"] > hourly_best[key]["parsed"]["usd"]:
-                                if parsed["usd"] >= MIN_USD:
-                                    hourly_best[key] = {"parsed": parsed}
-
+                    if not sig or sig in tx_history[wallet]:
+                        continue
+                    parsed = parse_tx(tx)
+                    if not parsed:
                         tx_history[wallet].add(sig)
-
+                        continue
+                    action = parsed["action"]
+                    mint = parsed["mint"]
+                    open_key = f"{name}_{mint}"
+                    if action == "SELL" and open_key in open_positions:
+                        token_name, price, mcap = get_token_info(mint)
+                        await send_notif(app, name, parsed, token_name, price, mcap)
+                        daily_stats[name]["sell"] += 1
+                        daily_stats[name]["pnl"] += parsed["usd"]
+                        del open_positions[open_key]
+                        tx_history[wallet].add(sig)
+                        continue
+                    if action == "BUY":
+                        if not hourly_slot["BUY"]:
+                            hourly_slot["BUY"] = True
+                            token_name, price, mcap = get_token_info(mint)
+                            await send_notif(app, name, parsed, token_name, price, mcap)
+                            daily_stats[name]["buy"] += 1
+                            daily_stats[name]["spent"] += parsed["usd"]
+                            daily_stats[name]["pnl"] -= parsed["usd"]
+                            open_positions[open_key] = parsed
+                    elif action == "SELL":
+                        if not hourly_slot["SELL"]:
+                            hourly_slot["SELL"] = True
+                            token_name, price, mcap = get_token_info(mint)
+                            await send_notif(app, name, parsed, token_name, price, mcap)
+                            daily_stats[name]["sell"] += 1
+                            daily_stats[name]["pnl"] += parsed["usd"]
+                    tx_history[wallet].add(sig)
             await asyncio.sleep(60)
         except Exception as e:
             print(f"Error: {e}")
@@ -279,6 +244,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pesan = f"👁️ *Wallet Tracker*: {status}\n\n"
     pesan += f"💲 *SOL Price:* ${sol_price:.2f}\n"
     pesan += f"🎯 *Min Trade:* ${MIN_USD}\n\n"
+    pesan += f"📂 *Open Positions:* {len(open_positions)}\n\n"
     pesan += "🐋 *Monitoring:*\n"
     for name in WALLETS.keys():
         pesan += f"• {name}\n"
@@ -299,7 +265,7 @@ async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main():
     global app
-    print("Wallet Tracker Bot v3")
+    print("Wallet Tracker Bot v4")
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("recap", cmd_recap))
@@ -311,7 +277,7 @@ async def main():
         sol_price = get_sol_price()
         await app.bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
-            text=f"👁️ *Wallet Tracker V3 AKTIF!*\n\n🐋 Monitoring 9 wallet\n💲 SOL: ${sol_price:.2f}\n🎯 Min trade: ${MIN_USD}\n📊 Notif: 1 BUY + 1 SELL per jam\n📋 Recap: 20:00 WIB\n\n/status /recap /start /stop",
+            text=f"👁️ *Wallet Tracker V4 AKTIF!*\n\n🐋 Monitoring 9 wallet\n💲 SOL: ${sol_price:.2f}\n🎯 Min trade: ${MIN_USD}\n📊 Notif: 1 BUY + 1 SELL per jam (siapa duluan)\n🔄 Open position dipantau lintas jam\n📋 Recap: 20:00 WIB\n\n/status /recap /start /stop",
             parse_mode="Markdown"
         )
         await monitor_wallets(app)
