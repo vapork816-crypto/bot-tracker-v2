@@ -1,6 +1,7 @@
 import requests
 import asyncio
 from datetime import datetime, timezone
+import pytz
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -124,9 +125,9 @@ def parse_tx(tx):
         return None
 
 async def send_notif(app, name, parsed, token_name, price, mcap):
-    tx_time = datetime.fromtimestamp(parsed["time"], tz=timezone.utc)
-    wib_h = (tx_time.hour + 7) % 24
-    waktu = tx_time.strftime("%H:%M:%S") + " UTC (" + str(wib_h).zfill(2) + ":" + tx_time.strftime("%M") + " WIB)"
+    wib_tz = pytz.timezone("Asia/Jakarta")
+    tx_time = datetime.fromtimestamp(parsed["time"], tz=wib_tz)
+    waktu = tx_time.strftime("%H:%M:%S WIB")
     if parsed["action"] == "BUY":
         emoji = "🟢"
         action_text = "BUY 🚀"
