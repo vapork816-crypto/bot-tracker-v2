@@ -285,7 +285,6 @@ async def run_bot():
     tg_app.add_handler(CommandHandler("stop", cmd_stop))
     await tg_app.initialize()
     await tg_app.start()
-    await tg_app.updater.start_polling()
     sol_price = get_sol_price()
     await tg_app.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
