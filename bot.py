@@ -266,17 +266,17 @@ async def main():
     app.add_handler(CommandHandler("recap", cmd_recap))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("stop", cmd_stop))
+    sol_price = get_sol_price()
     await app.initialize()
     await app.start()
-    sol_price = get_sol_price()
     await app.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
         text="👁️ *Wallet Tracker V4 AKTIF!*\n\n🐋 Monitoring 9 wallet\n💲 SOL: $" + str(round(sol_price, 2)) + "\n🎯 Min trade: $" + str(MIN_USD) + "\n📊 Notif: 1 BUY + 1 SELL per jam\n🔄 Open position lintas jam\n📋 Recap: 20:00 WIB\n\n/status /recap /start /stop",
         parse_mode="Markdown"
     )
-    await app.updater.start_polling()
-    await monitor_wallets(app)
-    await app.updater.stop()
-    await app.stop()
+    await asyncio.gather(
+        app.updater.start_polling(),
+        monitor_wallets(app)
+    )
 
 asyncio.run(main())
