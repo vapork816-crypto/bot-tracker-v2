@@ -228,12 +228,7 @@ async def monitor_wallets(app):
                             daily_stats[name]["pnl"] -= parsed["usd"]
                             open_positions[open_key] = parsed
                     elif action == "SELL":
-                        if not hourly_slot["SELL"]:
-                            hourly_slot["SELL"] = True
-                            token_name, price, mcap = get_token_info(mint)
-                            await send_notif(app, name, parsed, token_name, price, mcap)
-                            daily_stats[name]["sell"] += 1
-                            daily_stats[name]["pnl"] += parsed["usd"]
+                        pass  # Skip SELL tanpa open position
                     tx_history[wallet].add(sig)
             await asyncio.sleep(60)
         except Exception as e:
