@@ -125,9 +125,11 @@ def parse_tx(tx):
         return None
 
 async def send_notif(app, name, parsed, token_name, price, mcap):
+    utc_tz = timezone.utc
     wib_tz = pytz.timezone("Asia/Jakarta")
-    tx_time = datetime.fromtimestamp(parsed["time"], tz=wib_tz)
-    waktu = tx_time.strftime("%H:%M:%S WIB")
+    tx_time_utc = datetime.fromtimestamp(parsed["time"], tz=utc_tz)
+    tx_time_wib = tx_time_utc.astimezone(wib_tz)
+    waktu = tx_time_utc.strftime("%H:%M:%S UTC") + " | " + tx_time_wib.strftime("%H:%M:%S WIB")
     if parsed["action"] == "BUY":
         emoji = "🟢"
         action_text = "BUY 🚀"
