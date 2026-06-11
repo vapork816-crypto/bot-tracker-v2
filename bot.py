@@ -13,15 +13,10 @@ ALCHEMY_API_KEY = "XROPo8Klz07GCVxHUNwmU"
 ALCHEMY_URL = "https://solana-mainnet.g.alchemy.com/v2/" + ALCHEMY_API_KEY
 
 WALLETS = {
-    "Stigman": "8fsKLLtvKNanL4ginCaiRS6UfeemY11rSf8U8fN1dJw4",
-    "Cupseyy": "2fg5QD1eD7rzNNCsvnhmXFm5hqNgwTTG8p7kQ6f3rx6f",
-    "Yp12": "7cQjAvzJsmdePPMk8TiW8hYHHhCfdNtEaaNK3o46YP12",
     "71pA": "71pAfN1nJhcLaezSRYvwdsNFE9PnY9hNfcxB4nZ1gdAp",
     "JCF": "JCFpfkrCAoovfRtkAdCde2TvPZHCmQgK5mm8Hc2LKWMZ",
     "9L32": "9L32VYiZ8AD67gaH283dPfQwviQ6AFXuzaisWR92toTT",
-    "8EMY": "8EmYYBEN6a4xE92gLsAKVZHtmC5Ga4eNxXp1c9E8jiWg",
-    "CYA": "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o",
-    "nyhrox": "6S8GezkxYUfZy9JPtYnanbcZTMB87Wjt1qx3c6ELajKC"
+    "CYA": "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o"
 }
 
 STABLE_TOKENS = [
@@ -40,6 +35,7 @@ hourly_slot = {"BUY": False, "SELL": False}
 last_hour = -1
 open_positions = {}
 daily_stats = {name: {"buy": 0, "sell": 0, "spent": 0, "pnl": 0} for name in WALLETS.keys()}
+buy_count = {name: {} for name in WALLETS.keys()}
 wib_tz = pytz.timezone("Asia/Jakarta")
 app = None
 
@@ -170,9 +166,8 @@ def parse_tx(tx, wallet):
                 amount_out = abs(diff)
 
         sol_price = get_sol_price()
-        min_sol = MIN_USD / sol_price
 
-        if sol_change < -min_sol and token_in and token_in not in STABLE_TOKENS:
+        if sol_change < 0 and token_in and token_in not in STABLE_TOKENS:
             sol_spent = abs(sol_change)
             return {"sig": sig, "action": "BUY", "mint": token_in, "sol": round(sol_spent, 4), "amount": amount_in, "usd": round(sol_spent * sol_price, 2), "time": tx_time}
         elif sol_change > 0 and token_out and token_out not in STABLE_TOKENS:
@@ -266,6 +261,9 @@ async def monitor_wallets():
                     mint = parsed["mint"]
                     open_key = name + "_" + mint
                     if action == "SELL" and open_key in open_positions:
+                        if daily_stats[name]["sell"] >= daily_stats[name]["buy"]:
+                            tx_history[wallet].add(sig)
+                            continue
                         token_name, price, mcap = get_token_info(mint)
                         await send_notif(name, parsed, token_name, price, mcap)
                         daily_stats[name]["sell"] += 1
