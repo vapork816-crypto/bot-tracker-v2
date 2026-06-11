@@ -1,8 +1,6 @@
 import requests
 import asyncio
 import pytz
-import base64
-import struct
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -26,7 +24,6 @@ STABLE_TOKENS = [
 ]
 
 TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-MIN_USD = 150
 bot_aktif = True
 tx_history = {wallet: set() for wallet in WALLETS.values()}
 sol_price_cache = {"price": 150, "last_update": 0}
@@ -35,7 +32,6 @@ hourly_slot = {"BUY": False, "SELL": False}
 last_hour = -1
 open_positions = {}
 daily_stats = {name: {"buy": 0, "sell": 0, "spent": 0, "pnl": 0} for name in WALLETS.keys()}
-buy_count = {name: {} for name in WALLETS.keys()}
 wib_tz = pytz.timezone("Asia/Jakarta")
 app = None
 
@@ -282,11 +278,12 @@ async def monitor_wallets():
                             open_positions[open_key] = parsed
                     elif action == "SELL":
                         if not hourly_slot["SELL"]:
-                            hourly_slot["SELL"] = True
-                            token_name, price, mcap = get_token_info(mint)
-                            await send_notif(name, parsed, token_name, price, mcap)
-                            daily_stats[name]["sell"] += 1
-                            daily_stats[name]["pnl"] += parsed["usd"]
+                            if daily_stats[name]["sell"] < daily_stats[name]["buy"]:
+                                hourly_slot["SELL"] = True
+                                token_name, price, mcap = get_token_info(mint)
+                                await send_notif(name, parsed, token_name, price, mcap)
+                                daily_stats[name]["sell"] += 1
+                                daily_stats[name]["pnl"] += parsed["usd"]
                     tx_history[wallet].add(sig)
             await asyncio.sleep(60)
         except Exception as e:
@@ -298,7 +295,6 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status = "✅ Aktif" if bot_aktif else "⛔ Berhenti"
     pesan = "👁️ *Wallet Tracker*: " + status + "\n\n"
     pesan += "💲 *SOL Price:* $" + str(round(sol_price, 2)) + "\n"
-    pesan += "🎯 *Min Trade:* $" + str(MIN_USD) + "\n\n"
     pesan += "📂 *Open Positions:* " + str(len(open_positions)) + "\n\n"
     pesan += "🐋 *Monitoring:*\n"
     for name in WALLETS.keys():
@@ -322,7 +318,7 @@ async def post_init(application):
     sol_price = get_sol_price()
     await application.bot.send_message(
         chat_id=TELEGRAM_CHAT_ID,
-        text="👁️ *Wallet Tracker V5 AKTIF!*\n\n🐋 Monitoring 9 wallet\n💲 SOL: $" + str(round(sol_price, 2)) + "\n🎯 Min trade: $" + str(MIN_USD) + "\n⚡ API: Alchemy\n📊 Notif: 1 BUY + 1 SELL per jam\n🔄 Open position lintas jam\n📋 Recap: 20:00 WIB\n\n/status /recap /start /stop",
+        text="👁️ *Wallet Tracker V5 AKTIF!*\n\n🐋 Monitoring 4 wallet\n💲 SOL: $" + str(round(sol_price, 2)) + "\n⚡ API: Alchemy\n📊 Notif: 1 BUY + 1 SELL per jam\n🔄 Open position lintas jam\n📋 Recap: 20:00 WIB\n\n/status /recap /start /stop",
         parse_mode="Markdown"
     )
     asyncio.create_task(monitor_wallets())
