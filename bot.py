@@ -11,7 +11,7 @@ ALCHEMY_API_KEY = "XROPo8Klz07GCVxHUNwmU"
 ALCHEMY_URL = "https://solana-mainnet.g.alchemy.com/v2/" + ALCHEMY_API_KEY
 
 WALLETS = {
-    "71pA": "71pAfN1nJhcLaezSRYvwdsNFE9PnY9hNfcxB4nZ1gdAp",
+    "DNfuF": "DNfuF1L62WWyW3pNakVkyGGFzVVhj4Yr52jSmdTyeBHm",
     "JCF": "JCFpfkrCAoovfRtkAdCde2TvPZHCmQgK5mm8Hc2LKWMZ",
     "9L32": "9L32VYiZ8AD67gaH283dPfQwviQ6AFXuzaisWR92toTT",
     "CYA": "CyaE1VxvBrahnPWkqm5VsdCvyS2QmNht2UFrKJHga54o"
